@@ -26,13 +26,13 @@ public class Event {
     @GeneratedValue(strategy = GenerationType.IDENTITY) // Автоинкремент ID
     private Long id; // Уникальный идентификатор мероприятия
 
-    @Column(nullable = false) // Колонка не может быть NULL
+    @Column(length = 1000, nullable = false) // Колонка не может быть NULL
     private String name; // Название мероприятия
 
     @Column(nullable = false)
     private LocalDateTime date; // Дата и время проведения мероприятия
 
-    @Column(nullable = false)
+    @Column(length = 1000, nullable = false)
     private String location; // Место проведения мероприятия
 
     @Column
@@ -41,10 +41,10 @@ public class Event {
     @Column(name = "participants_count")
     private Integer participantsCount; // Количество участников (если указано)
 
-    @Column(name = "organizer_name")
+    @Column(name = "organizer_name", length = 1000)
     private String organizerName; // Имя организатора
 
-    @Column(name = "organizer_contact", nullable = false)
+    @Column(name = "organizer_contact", length = 500, nullable = false)
     private String organizerContact; // Контакт организатора (email, телефон, Telegram)
 
     @Column(name = "message_sent", nullable = false)
@@ -59,7 +59,7 @@ public class Event {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt; // Дата и время последнего обновления записи
 
-    @Column(name = "source_url")
+    @Column(name = "source_url", length = 2000)
     private String sourceUrl; // URL источника, откуда было спарсено мероприятие
 
     @PrePersist // Вызывается перед сохранением новой сущности

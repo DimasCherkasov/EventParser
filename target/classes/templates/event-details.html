@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Event Details</title>
+</head>
+<body>
+    <div th:fragment="content">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="event-details">
+                    <h1 class="mb-3" th:text="${event.name}">Название мероприятия</h1>
+                    
+                    <div class="mb-4">
+                        <span class="badge bg-success" th:if="${event.messageSent && event.responseReceived}">Получен ответ</span>
+                        <span class="badge bg-warning" th:if="${event.messageSent && !event.responseReceived}">Ожидает ответа</span>
+                        <span class="badge bg-danger" th:if="${!event.messageSent}">Сообщение не отправлено</span>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-3 fw-bold">Дата и время:</div>
+                        <div class="col-md-9" th:text="${#temporals.format(event.date, 'dd.MM.yyyy HH:mm')}">01.01.2023 12:00</div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-3 fw-bold">Место проведения:</div>
+                        <div class="col-md-9" th:text="${event.location}">Место проведения</div>
+                    </div>
+                    
+                    <div class="row mb-3" th:if="${event.price != null}">
+                        <div class="col-md-3 fw-bold">Цена:</div>
+                        <div class="col-md-9" th:text="${event.price + ' руб.'}">0 руб.</div>
+                    </div>
+                    
+                    <div class="row mb-3" th:if="${event.participantsCount != null}">
+                        <div class="col-md-3 fw-bold">Количество участников:</div>
+                        <div class="col-md-9" th:text="${event.participantsCount}">0</div>
+                    </div>
+                    
+                    <div class="row mb-3" th:if="${event.organizerName != null}">
+                        <div class="col-md-3 fw-bold">Организатор:</div>
+                        <div class="col-md-9" th:text="${event.organizerName}">Имя организатора</div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-3 fw-bold">Контакт организатора:</div>
+                        <div class="col-md-9" th:text="${event.organizerContact}">Контакт организатора</div>
+                    </div>
+                    
+                    <div class="row mb-3" th:if="${event.sourceUrl != null}">
+                        <div class="col-md-3 fw-bold">Источник:</div>
+                        <div class="col-md-9">
+                            <a th:href="${event.sourceUrl}" target="_blank" th:text="${event.sourceUrl}">URL источника</a>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-3 fw-bold">Создано:</div>
+                        <div class="col-md-9" th:text="${#temporals.format(event.createdAt, 'dd.MM.yyyy HH:mm')}">01.01.2023 12:00</div>
+                    </div>
+                    
+                    <div class="row mb-3" th:if="${event.updatedAt != null}">
+                        <div class="col-md-3 fw-bold">Обновлено:</div>
+                        <div class="col-md-9" th:text="${#temporals.format(event.updatedAt, 'dd.MM.yyyy HH:mm')}">01.01.2023 12:00</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Действия</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="/events" class="btn btn-outline-secondary">Вернуться к списку</a>
+                            
+                            <form th:if="${!event.messageSent}" th:action="@{'/api/events/' + ${event.id} + '/mark-message-sent'}" method="post" class="d-grid">
+                                <button type="submit" class="btn btn-primary">Отметить сообщение как отправленное</button>
+                            </form>
+                            
+                            <form th:if="${event.messageSent && !event.responseReceived}" th:action="@{'/api/events/' + ${event.id} + '/mark-response-received'}" method="post" class="d-grid">
+                                <button type="submit" class="btn btn-success">Отметить ответ как полученный</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Информация</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>ID: <span th:text="${event.id}">1</span></p>
+                        <p>Статус сообщения: 
+                            <span th:if="${event.messageSent}">Отправлено</span>
+                            <span th:unless="${event.messageSent}">Не отправлено</span>
+                        </p>
+                        <p>Статус ответа: 
+                            <span th:if="${event.responseReceived}">Получен</span>
+                            <span th:unless="${event.responseReceived}">Не получен</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

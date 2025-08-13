@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Parser Information</title>
+</head>
+<body>
+    <div th:fragment="content">
+        <h1 class="mb-4">Информация о парсере</h1>
+        
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number" th:text="${totalEvents}">0</div>
+                    <div class="stats-label">Всего мероприятий</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number" th:text="${upcomingEvents}">0</div>
+                    <div class="stats-label">Предстоящих мероприятий</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number" th:text="${eventsWithoutMessages}">0</div>
+                    <div class="stats-label">Без отправленных сообщений</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number" th:text="${eventsAwaitingResponse}">0</div>
+                    <div class="stats-label">Ожидают ответа</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Запустить парсинг</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="parseForm" action="/api/parser/parse-all" method="post" class="mb-3">
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">Запустить парсинг всех источников</button>
+                            </div>
+                        </form>
+                        
+                        <div id="parseResult" class="alert alert-info d-none">
+                            <p id="parseMessage">Результаты парсинга будут отображены здесь.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Последнее обновление</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Дата и время: <span th:text="${#temporals.format(lastUpdate, 'dd.MM.yyyy HH:mm:ss')}">01.01.2023 12:00:00</span></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Источники данных</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="sourcesList">
+                            <p>Загрузка источников...</p>
+                        </div>
+                        
+                        <form id="parseSourceForm" class="mt-3">
+                            <div class="mb-3">
+                                <label for="sourceUrl" class="form-label">URL источника для парсинга</label>
+                                <input type="text" class="form-control" id="sourceUrl" placeholder="https://example.com/events">
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-outline-primary">Запустить парсинг выбранного источника</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+            // Загрузка списка источников при загрузке страницы
+            document.addEventListener('DOMContentLoaded', function() {
+                fetch('/api/parser/sources')
+                    .then(response => response.json())
+                    .then(sources => {
+                        const sourcesList = document.getElementById('sourcesList');
+                        if (sources.length === 0) {
+                            sourcesList.innerHTML = '<p>Нет настроенных источников.</p>';
+                            return;
+                        }
+                        
+                        let html = '<ul class="list-group">';
+                        sources.forEach(source => {
+                            html += `<li class="list-group-item d-flex justify-content-between align-items-center">
+                                        ${source}
+                                        <button class="btn btn-sm btn-outline-primary parse-source-btn" data-source="${source}">Парсить</button>
+                                     </li>`;
+                        });
+                        html += '</ul>';
+                        sourcesList.innerHTML = html;
+                        
+                        // Добавляем обработчики для кнопок парсинга отдельных источников
+                        document.querySelectorAll('.parse-source-btn').forEach(button => {
+                            button.addEventListener('click', function() {
+                                const source = this.getAttribute('data-source');
+                                parseSource(source);
+                            });
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error loading sources:', error);
+                        document.getElementById('sourcesList').innerHTML = '<p class="text-danger">Ошибка загрузки источников.</p>';
+                    });
+                
+                // Обработчик формы парсинга всех источников
+                document.getElementById('parseForm').addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const parseResult = document.getElementById('parseResult');
+                    const parseMessage = document.getElementById('parseMessage');
+                    
+                    parseResult.classList.remove('d-none', 'alert-success', 'alert-danger');
+                    parseResult.classList.add('alert-info');
+                    parseMessage.textContent = 'Выполняется парсинг всех источников...';
+                    
+                    fetch('/api/parser/parse-all', {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        parseResult.classList.remove('alert-info', 'alert-danger');
+                        parseResult.classList.add('alert-success');
+                        
+                        if (data.success) {
+                            parseMessage.textContent = `Парсинг успешно завершен. Спарсено ${data.parsedCount} мероприятий из ${data.sources.length} источников.`;
+                        } else {
+                            parseMessage.textContent = data.message || 'Парсинг завершен с ошибкой.';
+                            parseResult.classList.remove('alert-success');
+                            parseResult.classList.add('alert-danger');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error parsing sources:', error);
+                        parseResult.classList.remove('alert-info', 'alert-success');
+                        parseResult.classList.add('alert-danger');
+                        parseMessage.textContent = 'Произошла ошибка при парсинге.';
+                    });
+                });
+                
+                // Обработчик формы парсинга выбранного источника
+                document.getElementById('parseSourceForm').addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const sourceUrl = document.getElementById('sourceUrl').value.trim();
+                    
+                    if (sourceUrl) {
+                        parseSource(sourceUrl);
+                    }
+                });
+            });
+            
+            // Функция для парсинга конкретного источника
+            function parseSource(source) {
+                const parseResult = document.getElementById('parseResult');
+                const parseMessage = document.getElementById('parseMessage');
+                
+                parseResult.classList.remove('d-none', 'alert-success', 'alert-danger');
+                parseResult.classList.add('alert-info');
+                parseMessage.textContent = `Выполняется парсинг источника: ${source}...`;
+                
+                fetch(`/api/parser/parse?source=${encodeURIComponent(source)}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    parseResult.classList.remove('alert-info', 'alert-danger');
+                    parseResult.classList.add('alert-success');
+                    
+                    if (data.success) {
+                        parseMessage.textContent = `Парсинг успешно завершен. Спарсено ${data.parsedCount} мероприятий, сохранено ${data.savedCount} новых мероприятий.`;
+                    } else {
+                        parseMessage.textContent = data.error || 'Парсинг завершен с ошибкой.';
+                        parseResult.classList.remove('alert-success');
+                        parseResult.classList.add('alert-danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error parsing source:', error);
+                    parseResult.classList.remove('alert-info', 'alert-success');
+                    parseResult.classList.add('alert-danger');
+                    parseMessage.textContent = 'Произошла ошибка при парсинге.';
+                });
+            }
+        </script>
+    </div>
+</body>
+</html>

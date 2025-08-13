@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${title} ?: 'Ошибка'">Ошибка</title>
+</head>
+<body>
+    <div th:fragment="content">
+        <div class="error-container">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="error-header">
+                        <h1 class="text-danger">Ошибка <span th:text="${status}">500</span></h1>
+                        <h2 th:text="${error}">Внутренняя ошибка сервера</h2>
+                    </div>
+                    
+                    <div class="error-details">
+                        <p th:text="${message}">Произошла непредвиденная ошибка.</p>
+                        <p>Путь: <span th:text="${path}">/unknown</span></p>
+                        <p>Время: <span th:text="${timestamp}">01.01.2023 12:00:00</span></p>
+                    </div>
+                    
+                    <div class="error-actions">
+                        <a href="/" class="btn btn-primary">
+                            <i class="fas fa-home"></i> Вернуться на главную
+                        </a>
+                        <a href="/parser" class="btn btn-outline-primary">
+                            <i class="fas fa-cogs"></i> Информация о парсере
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <style>
+            .error-container {
+                padding: 40px 0;
+                text-align: center;
+            }
+            
+            .error-header {
+                margin-bottom: 30px;
+            }
+            
+            .error-details {
+                margin-bottom: 30px;
+                font-size: 1.1rem;
+            }
+            
+            .error-actions {
+                margin-top: 30px;
+            }
+            
+            .error-actions .btn {
+                margin: 0 10px;
+            }
+        </style>
+    </div>
+</body>
+</html>

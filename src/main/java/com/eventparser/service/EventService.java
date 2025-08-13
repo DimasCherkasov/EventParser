@@ -31,14 +31,14 @@ public class EventService {
     @Transactional
     public int saveEvents(List<Event> events) {
         int savedCount = 0;
-        
+
         for (Event event : events) {
             // Check if event already exists
             List<Event> existingEvents = eventRepository.findByNameContainingIgnoreCase(event.getName());
             boolean exists = existingEvents.stream()
                     .anyMatch(e -> e.getDate().equals(event.getDate()) && 
                                   e.getLocation().equalsIgnoreCase(event.getLocation()));
-            
+
             if (!exists) {
                 eventRepository.save(event);
                 savedCount++;
@@ -47,7 +47,7 @@ public class EventService {
                 log.info("Skipped duplicate event: {} at {} on {}", event.getName(), event.getLocation(), event.getDate());
             }
         }
-        
+
         return savedCount;
     }
 
@@ -194,5 +194,18 @@ public class EventService {
         } else {
             throw new IllegalArgumentException("Event not found with ID: " + id);
         }
+    }
+
+    /**
+     * Clear all events from the database.
+     * 
+     * @return The number of events deleted
+     */
+    @Transactional
+    public int clearAllEvents() {
+        int count = eventRepository.findAll().size();
+        eventRepository.deleteAll();
+        log.info("Cleared all {} events from the database", count);
+        return count;
     }
 }
