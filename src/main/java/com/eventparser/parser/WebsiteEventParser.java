@@ -131,6 +131,267 @@ public class WebsiteEventParser implements EventParser, InitializingBean {
                     eventElements = doc.select("div.card, div[class*='event'], div[class*='card'], article, div.item");
                     log.info("Found {} event elements with generic selectors", eventElements.size());
                 }
+            } else if (url.contains("expomap.ru")) {
+                // Специфичные селекторы для Expomap.ru
+                log.info("Parsing Expomap.ru website");
+
+                // Логируем часть HTML для анализа структуры страницы
+                log.info("HTML sample for analysis: {}", doc.html().substring(0, Math.min(2000, doc.html().length())));
+
+                // Проверяем наличие элементов с классами, содержащими 'expo'
+                Elements expoClassElements = doc.select("[class*=expo]");
+                log.info("Found {} elements with class containing 'expo'", expoClassElements.size());
+                if (!expoClassElements.isEmpty()) {
+                    log.info("Sample expo class element: {}", expoClassElements.get(0).outerHtml());
+                }
+
+                // Проверяем наличие элементов с тегом 'article'
+                Elements articleElements = doc.select("article");
+                log.info("Found {} article elements", articleElements.size());
+                if (!articleElements.isEmpty()) {
+                    log.info("Sample article element: {}", articleElements.get(0).outerHtml());
+                }
+
+                // Проверяем наличие элементов с классом 'item'
+                Elements itemElements = doc.select(".item");
+                log.info("Found {} elements with class 'item'", itemElements.size());
+                if (!itemElements.isEmpty()) {
+                    log.info("Sample item element: {}", itemElements.get(0).outerHtml());
+                }
+
+                // Проверяем наличие ссылок на выставки
+                Elements expoLinks = doc.select("a[href*=expo]");
+                log.info("Found {} links containing 'expo' in href", expoLinks.size());
+                if (!expoLinks.isEmpty()) {
+                    log.info("Sample expo link: {}", expoLinks.get(0).outerHtml());
+                    // Проверяем родительские элементы ссылок
+                    log.info("Parent of expo link: {}", expoLinks.get(0).parent().outerHtml());
+                }
+
+                // Пробуем более специфичные селекторы для expomap.ru
+                log.info("Trying specific selectors for Expomap.ru");
+                eventElements = doc.select(".expo-item, .expo-card, .event-card, div[class*='expo'], div[class*='event'], .item-expo, .expo, .exhibition-item, .exhibition-card")
+                        .not(".level1").not(".exhb").not(".csb-menu-input").not(".trigger");
+                log.info("Found {} event elements on Expomap.ru with specific selectors", eventElements.size());
+
+                // Если не найдено элементов, пробуем более общие селекторы
+                if (eventElements.isEmpty()) {
+                    log.info("Trying more generic selectors for Expomap.ru");
+                    eventElements = doc.select("div.card, div[class*='expo'], div[class*='event'], div[class*='exhibition'], div[class*='card'], article, div.item, li.item, .list-item, .grid-item")
+                            .not(".level1").not(".exhb").not(".csb-menu-input").not(".trigger");
+                    log.info("Found {} event elements with generic selectors", eventElements.size());
+                }
+
+                // Если все еще не найдено элементов, пробуем селекторы для таблиц и списков
+                if (eventElements.isEmpty()) {
+                    log.info("Trying table and list selectors for Expomap.ru");
+                    eventElements = doc.select("table tr, ul li, ol li")
+                            .not(".level1").not(".exhb").not(".csb-menu-input").not(".trigger");
+                    log.info("Found {} potential event elements in tables and lists", eventElements.size());
+
+                    // Фильтруем элементы, оставляя только те, которые содержат ссылки или текст определенной длины
+                    // и исключаем элементы меню или фильтров
+                    Elements filteredElements = new Elements();
+                    for (Element element : eventElements) {
+                        // Проверяем, что элемент не является элементом меню или фильтром
+                        if ((!element.select("a").isEmpty() || element.text().length() > 50) 
+                                && !element.hasClass("level1")
+                                && !element.hasClass("csb-menu-input")
+                                && !element.hasClass("trigger")
+                                && !element.text().contains("Алкогольная и табачная продукция")) {
+                            filteredElements.add(element);
+                        }
+                    }
+                    eventElements = filteredElements;
+                    log.info("Filtered to {} potential event elements from tables and lists", eventElements.size());
+                }
+
+                // Если все еще не найдено элементов, пробуем селекторы на основе ссылок
+                if (eventElements.isEmpty()) {
+                    log.info("Trying link-based selectors for Expomap.ru");
+                    Elements linkElements = doc.select("a[href*=expo], a[href*=exhibition], a[href*=event], a:contains(выставка), a:contains(форум), a:contains(конференция)")
+                            .not(".level1").not(".exhb").not(".csb-menu-input").not(".trigger");
+                    log.info("Found {} link elements to exhibitions", linkElements.size());
+
+                    // Преобразуем ссылки в элементы мероприятий
+                    eventElements = new Elements();
+                    for (Element linkElement : linkElements) {
+                        // Проверяем, что ссылка не является элементом меню или фильтром
+                        if (!linkElement.hasClass("trigger") 
+                                && !linkElement.text().contains("Алкогольная и табачная продукция")) {
+
+                            // Добавляем родительский элемент ссылки
+                            Element parent = linkElement.parent();
+                            if (parent != null && !parent.tagName().equals("body") && !parent.tagName().equals("html")
+                                    && !parent.hasClass("level1") && !parent.hasClass("csb-menu-input")) {
+                                if (!eventElements.contains(parent)) {
+                                    eventElements.add(parent);
+                                }
+                            }
+
+                            // Также добавляем родительский элемент родителя (если это не body или html)
+                            Element grandparent = parent != null ? parent.parent() : null;
+                            if (grandparent != null && !grandparent.tagName().equals("body") && !grandparent.tagName().equals("html")
+                                    && !grandparent.hasClass("level1") && !grandparent.hasClass("exhb")) {
+                                if (!eventElements.contains(grandparent)) {
+                                    eventElements.add(grandparent);
+                                }
+                            }
+                        }
+                    }
+                    log.info("Converted {} link elements to {} event elements", linkElements.size(), eventElements.size());
+                }
+
+                // Если все еще не найдено элементов, используем все div элементы с определенными характеристиками
+                if (eventElements.isEmpty()) {
+                    log.info("Trying all div elements with specific characteristics for Expomap.ru");
+                    Elements divElements = doc.select("div");
+                    log.info("Found {} div elements", divElements.size());
+
+                    // Фильтруем div элементы, оставляя только те, которые могут быть карточками мероприятий
+                    eventElements = new Elements();
+                    for (Element div : divElements) {
+                        // Проверяем, содержит ли div ссылку и имеет ли он достаточную глубину вложенности
+                        if (!div.select("a").isEmpty() && div.parents().size() >= 3 && div.children().size() >= 2
+                                && !div.hasClass("level1") && !div.hasClass("exhb") && !div.hasClass("csb-menu-input")) {
+                            String divText = div.text();
+                            // Проверяем, содержит ли текст div ключевые слова, связанные с выставками
+                            // и исключаем элементы меню или фильтров
+                            if ((divText.contains("выставка") || divText.contains("форум") || divText.contains("конференция") || 
+                                divText.contains("expo") || divText.contains("exhibition") || divText.contains("event"))
+                                && !divText.contains("Алкогольная и табачная продукция")) {
+                                eventElements.add(div);
+                            }
+                        }
+                    }
+                    log.info("Filtered to {} potential event elements from div elements", eventElements.size());
+                }
+
+                // Логируем примеры найденных элементов для отладки
+                if (!eventElements.isEmpty()) {
+                    int sampleCount = Math.min(3, eventElements.size());
+                    for (int i = 0; i < sampleCount; i++) {
+                        Element element = eventElements.get(i);
+                        log.info("Sample event element #{}: class={}, tag={}, text={}", 
+                                i+1, element.className(), element.tagName(), 
+                                element.text().substring(0, Math.min(100, element.text().length())));
+                    }
+                } else {
+                    log.warn("No event elements found on Expomap.ru with any selectors");
+                    // Логируем часть HTML для дальнейшего анализа
+                    log.debug("HTML for analysis: {}", doc.html().substring(0, Math.min(5000, doc.html().length())));
+                }
+
+                // Проверяем наличие пагинации на Expomap.ru
+                Elements paginationLinks = doc.select(".pagination a, .pager a, a.page-link, a[href*=page]");
+                if (!paginationLinks.isEmpty()) {
+                    log.info("Found pagination on Expomap.ru with {} links", paginationLinks.size());
+
+                    // Парсим события с текущей страницы
+                    for (Element eventElement : eventElements) {
+                        try {
+                            Event event = parseExpomapEventElement(eventElement, url);
+                            if (event != null) {
+                                events.add(event);
+                            }
+                        } catch (Exception e) {
+                            log.error("Error parsing Expomap.ru event element: {}", e.getMessage(), e);
+                        }
+                    }
+                    log.info("Parsed {} events from first page", events.size());
+
+                    // Парсим события с дополнительных страниц (до 5 страниц)
+                    int pagesParsed = 1; // Уже спарсили первую страницу
+                    int maxPages = 5; // Максимальное количество страниц для парсинга
+
+                    for (Element paginationLink : paginationLinks) {
+                        if (pagesParsed >= maxPages) {
+                            break; // Ограничиваем количество страниц
+                        }
+
+                        String pageUrl = paginationLink.attr("href");
+                        if (pageUrl != null && !pageUrl.isEmpty()) {
+                            // Если URL относительный, добавляем базовый URL
+                            if (pageUrl.startsWith("/")) {
+                                pageUrl = "https://expomap.ru" + pageUrl;
+                            } else if (!pageUrl.startsWith("http")) {
+                                pageUrl = "https://expomap.ru/" + pageUrl;
+                            }
+
+                            // Проверяем, что это не текущая страница
+                            if (!pageUrl.equals(url)) {
+                                log.info("Parsing additional page: {}", pageUrl);
+
+                                try {
+                                    // Выбираем случайный User-Agent для дополнительной страницы
+                                    String pageUserAgent = USER_AGENTS[new Random().nextInt(USER_AGENTS.length)];
+
+                                    // Добавляем случайную задержку перед запросом дополнительной страницы
+                                    try {
+                                        int delay = 1000 + new Random().nextInt(2000);
+                                        log.debug("Adding delay of {} ms before request to additional page", delay);
+                                        Thread.sleep(delay);
+                                    } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                        log.warn("Sleep interrupted", e);
+                                    }
+
+                                    // Подключаемся к URL дополнительной страницы
+                                    Document pageDoc = Jsoup.connect(pageUrl)
+                                            .userAgent(pageUserAgent)
+                                            .timeout(timeout)
+                                            .header("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7")
+                                            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+                                            .header("Connection", "keep-alive")
+                                            .header("Cache-Control", "max-age=0")
+                                            .get();
+
+                                    // Получаем элементы мероприятий с дополнительной страницы
+                                    Elements pageEventElements = pageDoc.select(".expo-item, .expo-card, .event-card, div[class*='expo'], div[class*='event'], .item-expo, .expo, div.card, article, div.item, li.item, .list-item");
+                                    log.info("Found {} event elements on additional page", pageEventElements.size());
+
+                                    // Если не найдено элементов, пробуем селекторы на основе ссылок
+                                    if (pageEventElements.isEmpty()) {
+                                        Elements pageLinkElements = pageDoc.select("a[href*=expo], a[href*=exhibition]");
+                                        log.info("Found {} link elements to exhibitions on additional page", pageLinkElements.size());
+
+                                        // Преобразуем ссылки в элементы мероприятий
+                                        pageEventElements = new Elements();
+                                        for (Element linkElement : pageLinkElements) {
+                                            Element parent = linkElement.parent();
+                                            if (parent != null) {
+                                                pageEventElements.add(parent);
+                                            }
+                                        }
+                                        log.info("Converted {} link elements to event elements on additional page", pageEventElements.size());
+                                    }
+
+                                    // Парсим события с дополнительной страницы
+                                    int pageEventCount = 0;
+                                    for (Element eventElement : pageEventElements) {
+                                        try {
+                                            Event event = parseExpomapEventElement(eventElement, pageUrl);
+                                            if (event != null) {
+                                                events.add(event);
+                                                pageEventCount++;
+                                            }
+                                        } catch (Exception e) {
+                                            log.error("Error parsing Expomap.ru event element from additional page: {}", e.getMessage(), e);
+                                        }
+                                    }
+                                    log.info("Parsed {} events from additional page", pageEventCount);
+
+                                    pagesParsed++;
+                                } catch (IOException e) {
+                                    log.error("Error connecting to additional page: {}", pageUrl, e);
+                                }
+                            }
+                        }
+                    }
+
+                    log.info("Parsed a total of {} events from {} pages of Expomap.ru", events.size(), pagesParsed);
+                    return events; // Возвращаем список спарсенных мероприятий со всех страниц
+                }
             } else if (url.contains("kudago.com")) {
                 // Специфичные селекторы для KudaGo.com
                 log.info("Parsing KudaGo.com website");
@@ -214,6 +475,8 @@ public class WebsiteEventParser implements EventParser, InitializingBean {
                         event = parseYandexAfishaEventElement(eventElement, url);
                     } else if (url.contains("timepad.ru")) {
                         event = parseTimepadRuEventElement(eventElement, url);
+                    } else if (url.contains("expomap.ru")) {
+                        event = parseExpomapEventElement(eventElement, url);
                     } else if (url.contains("kudago.com")) {
                         event = parseKudaGoEventElement(eventElement, url);
                     } else {
@@ -1119,6 +1382,297 @@ public class WebsiteEventParser implements EventParser, InitializingBean {
 
             // Если не удалось распарсить, возвращаем текущую дату
             log.warn("Could not parse KudaGo.com date: {}, using current date", dateStr);
+            return now;
+        }
+    }
+
+    /**
+     * Parse an event element from Expomap.ru.
+     *
+     * @param element The HTML element to parse
+     * @param sourceUrl The source URL
+     * @return The parsed Event
+     * 
+     * Парсит элемент мероприятия с сайта Expomap.ru.
+     *
+     * @param element HTML-элемент для парсинга
+     * @param sourceUrl URL источника
+     * @return Объект Event с данными мероприятия
+     */
+    private Event parseExpomapEventElement(Element element, String sourceUrl) {
+        log.debug("Parsing Expomap.ru event element: {}", element.outerHtml());
+
+        // Проверяем, не является ли элемент частью меню или фильтром
+        if (element.hasClass("level1") || element.hasClass("exhb") || element.hasClass("csb-menu-input") || 
+                element.hasClass("trigger") || element.hasClass("hidden") || element.hasClass("menu") || 
+                element.text().contains("Алкогольная и табачная продукция") || 
+                element.text().contains("checkbox") || element.text().contains("input") || 
+                element.text().contains("меню") || element.text().contains("фильтр") || 
+                element.text().contains("категории") || element.text().contains("выбрать") ||
+                element.hasAttr("data-name") || element.hasAttr("data-id") || element.hasAttr("data-sub") || 
+                element.hasAttr("data-template-id") || element.hasAttr("type") && element.attr("type").equals("checkbox") ||
+                element.select("input[type=checkbox]").size() > 0 || element.select("label").size() > 0) {
+            log.debug("Skipping menu or filter element: {}", element.outerHtml().substring(0, Math.min(100, element.outerHtml().length())));
+            return null;
+        }
+
+        // Извлекаем название мероприятия с использованием расширенного набора селекторов
+        String name = extractText(element, "h2, h3, h4, .expo-title, .expo-name, .title, .name, .event-title, .event-name, .card-title");
+        if (name.isEmpty()) {
+            // Пробуем извлечь название из атрибута title ссылки
+            name = element.select("a").attr("title");
+
+            // Если название все еще пустое, пробуем извлечь из текста ссылки
+            if (name.isEmpty()) {
+                Elements links = element.select("a");
+                for (Element link : links) {
+                    String linkText = link.text().trim();
+                    if (!linkText.isEmpty() && !linkText.equals("Подробнее") && !linkText.equals("Читать далее")) {
+                        name = linkText;
+                        break;
+                    }
+                }
+            }
+
+            // Если название все еще пустое, используем весь текст элемента
+            if (name.isEmpty()) {
+                name = element.text();
+
+                // Ограничиваем длину названия, если текст слишком длинный
+                if (name.length() > 100) {
+                    name = name.substring(0, 100) + "...";
+                }
+            }
+        }
+
+        // Очищаем название от лишних пробелов и переносов строк
+        name = name.replaceAll("\\s+", " ").trim();
+        log.debug("Extracted name: {}", name);
+
+        // Извлекаем дату проведения с использованием расширенного набора селекторов
+        String dateStr = extractText(element, ".expo-date, .date, .event-date, time, .calendar, .period, [class*='date'], [class*='time']");
+
+        // Если дата не найдена, ищем в тексте элемента даты в различных форматах
+        if (dateStr.isEmpty()) {
+            String elementText = element.text();
+            // Ищем даты в формате "DD месяц YYYY" или "DD-DD месяц YYYY"
+            for (String month : new String[]{"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"}) {
+                if (elementText.contains(month)) {
+                    int monthIndex = elementText.indexOf(month);
+                    int startIndex = Math.max(0, monthIndex - 20);
+                    int endIndex = Math.min(elementText.length(), monthIndex + 30);
+                    dateStr = elementText.substring(startIndex, endIndex);
+                    break;
+                }
+            }
+        }
+
+        LocalDateTime date = parseExpomapDate(dateStr);
+        log.debug("Extracted date: {} from {}", date, dateStr);
+
+        // Извлекаем место проведения с использованием расширенного набора селекторов
+        String location = extractText(element, ".expo-place, .place, .location, .venue, .address, [class*='place'], [class*='location'], [class*='venue'], [class*='address']");
+
+        // Если место проведения не найдено, ищем в тексте элемента ключевые слова, связанные с местом проведения
+        if (location.isEmpty()) {
+            String elementText = element.text();
+            for (String keyword : new String[]{"Место проведения:", "Место:", "Адрес:", "г. Москва", "Москва,"}) {
+                if (elementText.contains(keyword)) {
+                    int keywordIndex = elementText.indexOf(keyword);
+                    int startIndex = keywordIndex + keyword.length();
+                    int endIndex = Math.min(elementText.length(), startIndex + 100);
+                    String potentialLocation = elementText.substring(startIndex, endIndex).trim();
+
+                    // Ограничиваем длину места проведения до первого знака пунктуации или новой строки
+                    int punctuationIndex = potentialLocation.indexOf('.');
+                    if (punctuationIndex > 0) {
+                        potentialLocation = potentialLocation.substring(0, punctuationIndex);
+                    }
+
+                    location = potentialLocation.trim();
+                    break;
+                }
+            }
+        }
+
+        // Если место проведения все еще не найдено, используем дефолтное значение
+        if (location.isEmpty()) {
+            location = "Москва"; // Дефолтное значение, так как URL содержит /city/moscow/
+        }
+        log.debug("Extracted location: {}", location);
+
+        // Извлекаем цену (если есть) с использованием расширенного набора селекторов
+        String priceStr = extractText(element, ".price, .cost, .expo-price, [class*='price'], [class*='cost']");
+
+        // Если цена не найдена, ищем в тексте элемента ключевые слова, связанные с ценой
+        if (priceStr.isEmpty()) {
+            String elementText = element.text();
+            for (String keyword : new String[]{"Цена:", "Стоимость:", "руб.", "₽"}) {
+                if (elementText.contains(keyword)) {
+                    int keywordIndex = elementText.indexOf(keyword);
+                    int startIndex = Math.max(0, keywordIndex - 20);
+                    int endIndex = Math.min(elementText.length(), keywordIndex + 20);
+                    priceStr = elementText.substring(startIndex, endIndex);
+                    break;
+                }
+            }
+        }
+
+        BigDecimal price = parsePrice(priceStr);
+        log.debug("Extracted price: {} from {}", price, priceStr);
+
+        // Количество участников обычно не указывается на странице списка
+        Integer participantsCount = null;
+
+        // Извлекаем имя организатора (если есть) с использованием расширенного набора селекторов
+        String organizerName = extractText(element, ".organizer, .expo-organizer, .organizer-name, [class*='organizer'], [class*='organization']");
+
+        // Если имя организатора не найдено, ищем в тексте элемента ключевые слова, связанные с организатором
+        if (organizerName.isEmpty()) {
+            String elementText = element.text();
+            for (String keyword : new String[]{"Организатор:", "Организаторы:"}) {
+                if (elementText.contains(keyword)) {
+                    int keywordIndex = elementText.indexOf(keyword);
+                    int startIndex = keywordIndex + keyword.length();
+                    int endIndex = Math.min(elementText.length(), startIndex + 100);
+                    String potentialOrganizer = elementText.substring(startIndex, endIndex).trim();
+
+                    // Ограничиваем длину имени организатора до первого знака пунктуации или новой строки
+                    int punctuationIndex = potentialOrganizer.indexOf('.');
+                    if (punctuationIndex > 0) {
+                        potentialOrganizer = potentialOrganizer.substring(0, punctuationIndex);
+                    }
+
+                    organizerName = potentialOrganizer.trim();
+                    break;
+                }
+            }
+        }
+
+        // Если имя организатора все еще не найдено, используем дефолтное значение
+        if (organizerName.isEmpty()) {
+            organizerName = "Организатор выставки";
+        }
+
+        // Извлекаем контакты организатора (если есть)
+        String organizerContact = extractText(element, ".contact, .email, .phone, [class*='contact'], [class*='email'], [class*='phone']");
+
+        // Если контакты не найдены, ищем в тексте элемента email или телефон
+        if (organizerContact.isEmpty()) {
+            String elementText = element.text();
+
+            // Ищем email
+            Matcher emailMatcher = EMAIL_PATTERN.matcher(elementText);
+            if (emailMatcher.find()) {
+                organizerContact = emailMatcher.group();
+            } else {
+                // Ищем телефон
+                Matcher phoneMatcher = PHONE_PATTERN.matcher(elementText);
+                if (phoneMatcher.find()) {
+                    organizerContact = phoneMatcher.group();
+                } else {
+                    // Используем дефолтное значение
+                    organizerContact = "info@expomap.ru";
+                }
+            }
+        }
+
+        // Получаем URL события для дополнительной информации
+        String eventUrl = element.select("a").attr("href");
+        if (eventUrl != null && !eventUrl.isEmpty() && !eventUrl.startsWith("http")) {
+            // Если URL относительный, добавляем базовый URL
+            if (eventUrl.startsWith("/")) {
+                eventUrl = "https://expomap.ru" + eventUrl;
+            } else {
+                eventUrl = "https://expomap.ru/" + eventUrl;
+            }
+        }
+
+        // Если URL события пустой, используем URL источника
+        if (eventUrl == null || eventUrl.isEmpty()) {
+            eventUrl = sourceUrl;
+        }
+
+        // Создаем и возвращаем объект Event
+        return Event.builder()
+                .name(name)
+                .date(date)
+                .location(location)
+                .price(price)
+                .participantsCount(participantsCount)
+                .organizerName(organizerName)
+                .organizerContact(organizerContact)
+                .sourceUrl(eventUrl)
+                .build();
+    }
+
+    /**
+     * Parse a date string from Expomap.ru format.
+     *
+     * @param dateStr The date string to parse
+     * @return The parsed LocalDateTime
+     * 
+     * Парсит строку даты в формате Expomap.ru.
+     *
+     * @param dateStr Строка с датой для парсинга
+     * @return Объект LocalDateTime
+     */
+    private LocalDateTime parseExpomapDate(String dateStr) {
+        // Примеры форматов: "15-20 июня 2023", "15 июня 2023", "Сегодня", "Завтра"
+        LocalDateTime now = LocalDateTime.now();
+
+        if (dateStr == null || dateStr.isEmpty()) {
+            log.warn("Empty date string from Expomap.ru, using current date");
+            return now;
+        }
+
+        if (dateStr.contains("Сегодня")) {
+            // Если "Сегодня", используем текущую дату
+            return now.withHour(10).withMinute(0).withSecond(0).withNano(0);
+        } else if (dateStr.contains("Завтра")) {
+            // Если "Завтра", используем текущую дату + 1 день
+            return now.plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        } else {
+            // Пытаемся парсить полную дату
+            // Преобразуем названия месяцев на русском в числовой формат
+            String normalizedDateStr = dateStr
+                    .replace("января", "01")
+                    .replace("февраля", "02")
+                    .replace("марта", "03")
+                    .replace("апреля", "04")
+                    .replace("мая", "05")
+                    .replace("июня", "06")
+                    .replace("июля", "07")
+                    .replace("августа", "08")
+                    .replace("сентября", "09")
+                    .replace("октября", "10")
+                    .replace("ноября", "11")
+                    .replace("декабря", "12");
+
+            // Если есть диапазон дат (например, "15-20 июня 2023"), берем первую дату
+            if (normalizedDateStr.contains("-")) {
+                normalizedDateStr = normalizedDateStr.split("-")[0].trim();
+            }
+
+            // Извлекаем день, месяц и год
+            Pattern pattern = Pattern.compile("(\\d+)\\s+(\\d+)(?:\\s+(\\d{4}))?");
+            Matcher matcher = pattern.matcher(normalizedDateStr);
+
+            if (matcher.find()) {
+                int day = Integer.parseInt(matcher.group(1));
+                int month = Integer.parseInt(matcher.group(2));
+                int year = now.getYear(); // По умолчанию используем текущий год
+
+                if (matcher.groupCount() >= 3 && matcher.group(3) != null) {
+                    year = Integer.parseInt(matcher.group(3));
+                }
+
+                // Устанавливаем время начала выставки на 10:00
+                return LocalDateTime.of(year, month, day, 10, 0);
+            }
+
+            // Если не удалось распарсить, возвращаем текущую дату
+            log.warn("Could not parse Expomap.ru date: {}, using current date", dateStr);
             return now;
         }
     }

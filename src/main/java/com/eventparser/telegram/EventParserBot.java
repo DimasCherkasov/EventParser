@@ -284,6 +284,8 @@ public class EventParserBot extends TelegramLongPollingBot { // Наследуе
         message.append("Данные актуальны на: ").append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"))).append("\n\n");
         message.append("🌐 Для более подробной статистики посетите веб-интерфейс:\n").append(webInterfaceUrl).append("/parser");
 
+        // Статистика обычно не бывает слишком длинной, но на всякий случай используем
+        // метод sendTelegramMessage, который автоматически разбивает длинные сообщения
         sendTelegramMessage(chatId, message.toString(), createMainMenu());
     }
 
@@ -304,33 +306,92 @@ public class EventParserBot extends TelegramLongPollingBot { // Наследуе
             return;
         }
 
+        // Максимальное количество мероприятий в одном сообщении
+        final int MAX_EVENTS_PER_MESSAGE = 5;
+
+        // Общее количество мероприятий
+        int totalEvents = upcomingEvents.size();
+
+        // Отправляем первое сообщение с заголовком и первой группой мероприятий
         StringBuilder message = new StringBuilder();
-        message.append("📅 Предстоящие мероприятия (").append(upcomingEvents.size()).append(")\n\n");
+        message.append("📅 Предстоящие мероприятия (").append(totalEvents).append(")\n\n");
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
-        // Ограничиваем список до 10 мероприятий, чтобы не превысить лимит сообщения
-        int count = Math.min(upcomingEvents.size(), 10);
-        for (int i = 0; i < count; i++) {
-            Event event = upcomingEvents.get(i);
-            message.append(i + 1).append(". ").append(event.getName()).append("\n");
-            message.append("   📍 ").append(event.getLocation()).append("\n");
-            message.append("   🕒 ").append(event.getDate().format(formatter)).append("\n");
-            if (event.getPrice() != null) {
-                message.append("   💰 ").append(event.getPrice()).append(" руб.\n");
-            }
-            message.append("\n");
-        }
+        // Ограничиваем список до MAX_EVENTS_PER_MESSAGE мероприятий в первом сообщении
+        int firstMessageCount = Math.min(totalEvents, MAX_EVENTS_PER_MESSAGE);
+        appendEventsToMessage(message, upcomingEvents, 0, firstMessageCount, formatter);
 
-        if (upcomingEvents.size() > 10) {
-            message.append("... и еще ").append(upcomingEvents.size() - 10).append(" мероприятий.\n\n");
+        // Если есть еще мероприятия, указываем это
+        if (totalEvents > MAX_EVENTS_PER_MESSAGE) {
+            message.append("... и еще ").append(totalEvents - MAX_EVENTS_PER_MESSAGE).append(" мероприятий.\n\n");
         } else {
             message.append("\n");
         }
 
         message.append("🌐 Полный список предстоящих мероприятий доступен в веб-интерфейсе:\n").append(webInterfaceUrl).append("/");
 
+        // Отправляем первое сообщение с меню
         sendTelegramMessage(chatId, message.toString(), createMainMenu());
+
+        // Если есть больше мероприятий, отправляем их в дополнительных сообщениях
+        if (totalEvents > MAX_EVENTS_PER_MESSAGE) {
+            // Отправляем дополнительные сообщения с оставшимися мероприятиями
+            for (int offset = MAX_EVENTS_PER_MESSAGE; offset < totalEvents; offset += MAX_EVENTS_PER_MESSAGE) {
+                StringBuilder additionalMessage = new StringBuilder();
+                additionalMessage.append("📅 Предстоящие мероприятия (продолжение)\n\n");
+
+                int batchSize = Math.min(MAX_EVENTS_PER_MESSAGE, totalEvents - offset);
+                appendEventsToMessage(additionalMessage, upcomingEvents, offset, batchSize, formatter);
+
+                // Отправляем дополнительное сообщение без меню
+                sendTelegramMessage(chatId, additionalMessage.toString(), null);
+            }
+        }
+    }
+
+    /**
+     * Helper method to append event information to a message.
+     *
+     * @param message The StringBuilder to append to
+     * @param events The list of events
+     * @param offset The starting index
+     * @param count The number of events to append
+     * @param formatter The date formatter
+     */
+    private void appendEventsToMessage(StringBuilder message, List<Event> events, int offset, int count, DateTimeFormatter formatter) {
+        for (int i = 0; i < count; i++) {
+            Event event = events.get(offset + i);
+
+            // Ограничиваем длину названия и места проведения, чтобы избежать слишком длинных сообщений
+            String name = truncateString(event.getName(), 50);
+            String location = truncateString(event.getLocation(), 50);
+
+            message.append(offset + i + 1).append(". ").append(name).append("\n");
+            message.append("   📍 ").append(location).append("\n");
+            message.append("   🕒 ").append(event.getDate().format(formatter)).append("\n");
+            if (event.getPrice() != null) {
+                message.append("   💰 ").append(event.getPrice()).append(" руб.\n");
+            }
+            message.append("\n");
+        }
+    }
+
+    /**
+     * Helper method to truncate a string to a maximum length.
+     *
+     * @param str The string to truncate
+     * @param maxLength The maximum length
+     * @return The truncated string
+     */
+    private String truncateString(String str, int maxLength) {
+        if (str == null) {
+            return "";
+        }
+        if (str.length() <= maxLength) {
+            return str;
+        }
+        return str.substring(0, maxLength - 3) + "...";
     }
 
     /**
@@ -350,31 +411,74 @@ public class EventParserBot extends TelegramLongPollingBot { // Наследуе
             return;
         }
 
+        // Максимальное количество мероприятий в одном сообщении
+        final int MAX_EVENTS_PER_MESSAGE = 5;
+
+        // Общее количество мероприятий
+        int totalEvents = awaitingEvents.size();
+
+        // Отправляем первое сообщение с заголовком и первой группой мероприятий
         StringBuilder message = new StringBuilder();
-        message.append("⏳ Мероприятия, ожидающие ответа (").append(awaitingEvents.size()).append(")\n\n");
+        message.append("⏳ Мероприятия, ожидающие ответа (").append(totalEvents).append(")\n\n");
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
-        // Ограничиваем список до 10 мероприятий, чтобы не превысить лимит сообщения
-        int count = Math.min(awaitingEvents.size(), 10);
-        for (int i = 0; i < count; i++) {
-            Event event = awaitingEvents.get(i);
-            message.append(i + 1).append(". ").append(event.getName()).append("\n");
-            message.append("   📍 ").append(event.getLocation()).append("\n");
-            message.append("   🕒 ").append(event.getDate().format(formatter)).append("\n");
-            message.append("   ✉️ ").append(event.getOrganizerContact()).append("\n");
-            message.append("\n");
-        }
+        // Ограничиваем список до MAX_EVENTS_PER_MESSAGE мероприятий в первом сообщении
+        int firstMessageCount = Math.min(totalEvents, MAX_EVENTS_PER_MESSAGE);
+        appendAwaitingEventsToMessage(message, awaitingEvents, 0, firstMessageCount, formatter);
 
-        if (awaitingEvents.size() > 10) {
-            message.append("... и еще ").append(awaitingEvents.size() - 10).append(" мероприятий.\n\n");
+        // Если есть еще мероприятия, указываем это
+        if (totalEvents > MAX_EVENTS_PER_MESSAGE) {
+            message.append("... и еще ").append(totalEvents - MAX_EVENTS_PER_MESSAGE).append(" мероприятий.\n\n");
         } else {
             message.append("\n");
         }
 
         message.append("🌐 Полный список мероприятий, ожидающих ответа, доступен в веб-интерфейсе:\n").append(webInterfaceUrl).append("/events/awaiting-response");
 
+        // Отправляем первое сообщение с меню
         sendTelegramMessage(chatId, message.toString(), createMainMenu());
+
+        // Если есть больше мероприятий, отправляем их в дополнительных сообщениях
+        if (totalEvents > MAX_EVENTS_PER_MESSAGE) {
+            // Отправляем дополнительные сообщения с оставшимися мероприятиями
+            for (int offset = MAX_EVENTS_PER_MESSAGE; offset < totalEvents; offset += MAX_EVENTS_PER_MESSAGE) {
+                StringBuilder additionalMessage = new StringBuilder();
+                additionalMessage.append("⏳ Мероприятия, ожидающие ответа (продолжение)\n\n");
+
+                int batchSize = Math.min(MAX_EVENTS_PER_MESSAGE, totalEvents - offset);
+                appendAwaitingEventsToMessage(additionalMessage, awaitingEvents, offset, batchSize, formatter);
+
+                // Отправляем дополнительное сообщение без меню
+                sendTelegramMessage(chatId, additionalMessage.toString(), null);
+            }
+        }
+    }
+
+    /**
+     * Helper method to append awaiting event information to a message.
+     *
+     * @param message The StringBuilder to append to
+     * @param events The list of events
+     * @param offset The starting index
+     * @param count The number of events to append
+     * @param formatter The date formatter
+     */
+    private void appendAwaitingEventsToMessage(StringBuilder message, List<Event> events, int offset, int count, DateTimeFormatter formatter) {
+        for (int i = 0; i < count; i++) {
+            Event event = events.get(offset + i);
+
+            // Ограничиваем длину названия, места проведения и контакта, чтобы избежать слишком длинных сообщений
+            String name = truncateString(event.getName(), 50);
+            String location = truncateString(event.getLocation(), 50);
+            String contact = truncateString(event.getOrganizerContact(), 30);
+
+            message.append(offset + i + 1).append(". ").append(name).append("\n");
+            message.append("   📍 ").append(location).append("\n");
+            message.append("   🕒 ").append(event.getDate().format(formatter)).append("\n");
+            message.append("   ✉️ ").append(contact).append("\n");
+            message.append("\n");
+        }
     }
 
     /**
@@ -510,20 +614,88 @@ public class EventParserBot extends TelegramLongPollingBot { // Наследуе
      * @return true, если сообщение успешно отправлено, false в противном случае
      */
     public boolean sendTelegramMessage(String chatId, String text, ReplyKeyboardMarkup replyKeyboardMarkup) {
-        SendMessage message = new SendMessage(); // Создаем объект сообщения
-        message.setChatId(chatId); // Устанавливаем ID чата
-        message.setText(text); // Устанавливаем текст сообщения
+        return sendTelegramMessageInternal(chatId, text, replyKeyboardMarkup, false);
+    }
 
-        if (replyKeyboardMarkup != null) {
-            message.setReplyMarkup(replyKeyboardMarkup); // Устанавливаем разметку клавиатуры, если она предоставлена
-        }
+    /**
+     * Internal method to send a Telegram message with recursion control.
+     *
+     * @param chatId The chat ID to send the message to
+     * @param text The message text
+     * @param replyKeyboardMarkup The keyboard markup to display (optional)
+     * @param isRecursiveCall Flag to indicate if this is a recursive call
+     * @return true if the message was sent successfully, false otherwise
+     */
+    private boolean sendTelegramMessageInternal(String chatId, String text, ReplyKeyboardMarkup replyKeyboardMarkup, boolean isRecursiveCall) {
+        // Максимальная длина сообщения в Telegram
+        final int MAX_MESSAGE_LENGTH = 4000; // Используем 4000 вместо 4096 для запаса
 
-        try {
-            execute(message); // Отправляем сообщение
-            return true;
-        } catch (TelegramApiException e) {
-            log.error("Failed to send Telegram message to chat {}: {}", chatId, e.getMessage(), e); // Логируем ошибку
-            return false;
+        // Если сообщение короче максимальной длины, отправляем его как обычно
+        if (text.length() <= MAX_MESSAGE_LENGTH) {
+            SendMessage message = new SendMessage(); // Создаем объект сообщения
+            message.setChatId(chatId); // Устанавливаем ID чата
+            message.setText(text); // Устанавливаем текст сообщения
+
+            if (replyKeyboardMarkup != null) {
+                message.setReplyMarkup(replyKeyboardMarkup); // Устанавливаем разметку клавиатуры, если она предоставлена
+            }
+
+            try {
+                execute(message); // Отправляем сообщение
+                return true;
+            } catch (TelegramApiException e) {
+                log.error("Failed to send Telegram message to chat {}: {}", chatId, e.getMessage(), e); // Логируем ошибку
+                return false;
+            }
+        } else if (!isRecursiveCall) { // Проверяем, что это не рекурсивный вызов
+            // Если сообщение длиннее максимальной длины, разбиваем его на части
+            log.info("Message is too long ({} characters), splitting into parts", text.length());
+
+            // Разбиваем сообщение на части по строкам
+            String[] lines = text.split("\n");
+            StringBuilder currentPart = new StringBuilder();
+            boolean success = true;
+
+            for (String line : lines) {
+                // Если строка сама по себе длиннее максимальной длины, разбиваем ее на части
+                if (line.length() > MAX_MESSAGE_LENGTH) {
+                    // Если у нас уже есть текст в текущей части, отправляем его
+                    if (currentPart.length() > 0) {
+                        success = success && sendTelegramMessageInternal(chatId, currentPart.toString(), null, true);
+                        currentPart = new StringBuilder();
+                    }
+
+                    // Разбиваем длинную строку на части
+                    for (int i = 0; i < line.length(); i += MAX_MESSAGE_LENGTH) {
+                        int endIndex = Math.min(i + MAX_MESSAGE_LENGTH, line.length());
+                        String part = line.substring(i, endIndex);
+                        success = success && sendTelegramMessageInternal(chatId, part, null, true);
+                    }
+                } 
+                // Если добавление текущей строки превысит максимальную длину, отправляем текущую часть
+                else if (currentPart.length() + line.length() + 1 > MAX_MESSAGE_LENGTH) {
+                    // Отправляем текущую часть без клавиатуры (клавиатура будет только в последней части)
+                    success = success && sendTelegramMessageInternal(chatId, currentPart.toString(), null, true);
+                    currentPart = new StringBuilder();
+                    currentPart.append(line).append("\n");
+                } else {
+                    // Добавляем строку к текущей части
+                    currentPart.append(line).append("\n");
+                }
+            }
+
+            // Отправляем последнюю часть с клавиатурой
+            if (currentPart.length() > 0) {
+                success = success && sendTelegramMessageInternal(chatId, currentPart.toString(), replyKeyboardMarkup, true);
+            }
+
+            return success;
+        } else {
+            // Если это рекурсивный вызов и сообщение все еще слишком длинное,
+            // просто обрезаем его до максимальной длины, чтобы избежать бесконечной рекурсии
+            log.warn("Message is still too long in recursive call, truncating to {} characters", MAX_MESSAGE_LENGTH);
+            String truncatedText = text.substring(0, MAX_MESSAGE_LENGTH);
+            return sendTelegramMessageInternal(chatId, truncatedText, replyKeyboardMarkup, true);
         }
     }
 
